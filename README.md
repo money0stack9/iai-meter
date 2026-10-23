@@ -87,7 +87,7 @@ node src/cli.js demo
 - 키가 없는 계정은 `unconfigured`로 표시되며, `status`는 종료 코드 1로 끝납니다.
 - `--config`를 지정하지 않으면 기본 설정을 사용합니다. 지정한 파일이 없거나 잘못되면 `invalid_config` 오류로 종료합니다. 데모 모드로 대체 실행하지 않습니다.
 
-**선택: 자체 호스팅 실행 도우미.** `scripts/run-with-credentials.py`는 본인 소유·권한 600·심볼릭 링크가 아닌 JSON 파일(`{"별칭": {"management_key": "..."}}`)에서 관리 키만 읽고, 매핑 파일(`{"IAI_ACCOUNT_A_KEY": "별칭"}`)에 따라 자식 프로세스 환경 변수로만 전달합니다. 예: `python3 scripts/run-with-credentials.py --credentials-file <비공개파일> --mapping-file <매핑> --node <node 절대경로> --app <저장소 절대경로> --config <설정 절대경로> --mode serve`. 개인 서비스 설정(launchd, systemd 등)에서 호출할 수 있지만, 특정 플랫폼 연동은 검증되지 않았습니다.
+**선택: 자체 호스팅 실행 도우미.** `scripts/run-with-credentials.py`는 본인 소유·권한 600·심볼릭 링크가 아닌 JSON 파일(`{"source-a": {"management_key": "..."}}`)에서 관리 키만 읽고, 매핑 파일(`{"IAI_ACCOUNT_A_KEY": "source-a"}`)에 따라 자식 프로세스 환경 변수로만 전달합니다. 예: `python3 scripts/run-with-credentials.py --credentials-file <비공개파일> --mapping-file <매핑> --node <node 절대경로> --app <저장소 절대경로> --config <설정 절대경로> --mode serve`. 개인 서비스 설정에서 호출할 수 있습니다. ChatGPT·Claude 계정의 실제 연결 완료와는 별개입니다.
 
 ### HTTP 엔드포인트
 

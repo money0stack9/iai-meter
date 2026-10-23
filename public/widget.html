@@ -71,7 +71,7 @@ if(unk)c.append(el('p','warn','일부 계정의 미정산 금액을 확인할 �
 app.append(c);
 const ac=el('section','card');ac.append(el('h2','lbl','계정 ('+d.accounts.length+')'));
 for(const a of d.accounts){const s=a.snapshot||{},b=s.balance||{},u=s.usage||{},det=el('details'),sm=el('summary');det.dataset.account=String(a.id??a.accountId??'');if(openIds.has(det.dataset.account))det.open=true;
-sm.append(String(a.label||a.id||U)+' · '+(s.state||U));if(!a.balanceIncluded)sm.append(' ',el('span','warn','[잔액 제외]'));if(!a.usageIncluded)sm.append(' ',el('span','warn','[사용량 제외]'));
+sm.append(String(a.label||a.id||U)+' · '+(({ready:'정상',partial:'일부 확인',stale:'이전 값',error:'오류',unconfigured:'미설정',demo:'데모'})[s.state]||U));if(!a.balanceIncluded)sm.append(' ',el('span','warn','[잔액 제외]'));if(!a.usageIncluded)sm.append(' ',el('span','warn','[사용량 제외]'));
 const gg=el('div','grid');kv(gg,'남은 무료 크레딧 · USD',usd(b.reportedCreditUsd));kv(gg,'보수적 사용 가능액',usd(b.conservativeAvailableUsd));kv(gg,'미정산',b.unsettledUsd==null?U:usd(b.unsettledUsd));
 kv(gg,'오늘 비용',usd(u.costUsd));kv(gg,'오늘 토큰',tok(u.totalTokens));kv(gg,'크레딧 일자 (UTC)',s.creditDayUtc||U);kv(gg,'초기화',ts(s.resetsAt));kv(gg,'잔액 확인 시각',ts(s.balanceObservedAt));kv(gg,'사용량 확인 시각',ts(s.usageObservedAt));
 if(Array.isArray(s.errors)&&s.errors.length)kv(gg,'오류','오류 '+s.errors.length+'건','err');det.append(sm,gg);ac.append(det)}
