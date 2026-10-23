@@ -34,6 +34,21 @@ struct USDAmount: Decodable, Equatable {
 }
 
 struct Balance: Decodable { let reportedCreditUsd: USDAmount?; let conservativeAvailableUsd: USDAmount? }
+/// Portfolio totals. Usage fields are optional and lenient: missing or malformed values decode as nil (unknown), never 0.
+struct Totals: Decodable {
+    let reportedCreditUsd: USDAmount?, conservativeAvailableUsd: USDAmount?
+    let costUsd: USDAmount?
+    /// Raw request count string; validated by MeterViewModel.digits.
+    let requests: String?
+    private enum K: String, CodingKey { case reportedCreditUsd, conservativeAvailableUsd, costUsd, requests }
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: K.self)
+        reportedCreditUsd = try c.decodeIfPresent(USDAmount.self, forKey: .reportedCreditUsd)
+        conservativeAvailableUsd = try c.decodeIfPresent(USDAmount.self, forKey: .conservativeAvailableUsd)
+        costUsd = try? c.decodeIfPresent(USDAmount.self, forKey: .costUsd)
+        requests = try? c.decodeIfPresent(String.self, forKey: .requests)
+    }
+}
 struct SourceError: Decodable { let source: String? }
 struct Snapshot: Decodable {
     let state: String; let balanceObservedAt: String?; let creditDayUtc: String?
@@ -44,7 +59,9 @@ struct Account: Decodable { let id: String; let label: String; let balanceInclud
 struct Portfolio: Decodable {
     let state: String, generatedAt: String, creditDayUtc: String, resetsAt: String
     let accountCount: Int, balanceAccountCount: Int
-    let totals: Balance
+    let totals: Totals
+    /// Accounts whose current-day usage is aggregated; nil when absent (old payloads).
+    let usageAccountCount: Int?
     let accounts: [Account]
     static let schemaID = "iai-meter.portfolio.v1"
     /// States considered displayable. Any other aggregate or included snapshot state, including error/stale/unconfigured, marks the portfolio stale.
@@ -52,7 +69,7 @@ struct Portfolio: Decodable {
     /// Demo data may be displayed but must be labeled explicitly.
     var isDemo: Bool { state == "demo" || accounts.contains { $0.balanceIncluded && $0.snapshot.state == "demo" } }
     private enum K: String, CodingKey {
-        case schema, state, generatedAt, creditDayUtc, resetsAt, accountCount, balanceAccountCount, totals, accounts
+        case schema, state, generatedAt, creditDayUtc, resetsAt, accountCount, balanceAccountCount, totals, accounts, usageAccountCount
     }
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: K.self)
@@ -64,7 +81,8 @@ struct Portfolio: Decodable {
         resetsAt = try c.decode(String.self, forKey: .resetsAt)
         accountCount = try c.decode(Int.self, forKey: .accountCount)
         balanceAccountCount = try c.decode(Int.self, forKey: .balanceAccountCount)
-        totals = try c.decode(Balance.self, forKey: .totals)
+        totals = try c.decode(Totals.self, forKey: .totals)
+        usageAccountCount = try? c.decodeIfPresent(Int.self, forKey: .usageAccountCount)
         accounts = try c.decode([Account].self, forKey: .accounts)
         guard accounts.count <= 100, accountCount == accounts.count,
               balanceAccountCount == accounts.filter(\.balanceIncluded).count else { throw bad("counts") }
@@ -125,6 +143,42 @@ struct MeterViewModel {
     var coverageText: String {
         guard let p = portfolio, p.balanceAccountCount > 0 else { return "반영 계정 " + Self.unknown }
         return "반영 계정 \(p.balanceAccountCount)/\(p.accountCount)"
+    }
+    /// Usage is shown only for fresh current-day portfolios with valid usage coverage.
+    private var usage: (p: Portfolio, partial: Bool)? {
+        guard let p = portfolio, !stale, let u = p.usageAccountCount, u > 0, u <= p.accountCount else { return nil }
+        return (p, u < p.accountCount)
+    }
+    private func tag(_ s: String) -> String { (usage?.partial ?? false) ? s + " (일부)" : s }
+    /// Strict ASCII digit string (no sign, decimal, exponent), leading zeros stripped.
+    static func digits(_ s: String?) -> String? {
+        guard let s, !s.isEmpty, s.utf8.count <= 40, s.utf8.allSatisfy({ (48...57).contains($0) }) else { return nil }
+        let t = String(s.drop(while: { $0 == "0" }))
+        return t.isEmpty ? "0" : t
+    }
+    private var requestDigits: String? { usage.flatMap { Self.digits($0.p.totals.requests) } }
+    var usageCostText: String {
+        guard let u = usage, let c = u.p.totals.costUsd else { return Self.unknown }
+        return tag(c.formatted(full: true))
+    }
+    var requestCountText: String { requestDigits.map { tag($0 + "회") } ?? Self.unknown }
+    /// Mean cost per recorded Router request, truncated to 6 decimals using Int64 microUSD.
+    var averageRequestCostText: String {
+        guard let u = usage, let d = requestDigits, let n = Int64(d) else { return Self.unknown }
+        if n == 0 { return tag("요청 없음") }
+        guard let c = u.p.totals.costUsd else { return Self.unknown }
+        let parts = c.raw.split(separator: ".")
+        guard let micro = Int64(String(parts[0]) + String(parts[1])) else { return Self.unknown }
+        let avg = micro / n
+        let frac = String(avg % 1_000_000)
+        let pad = String(repeating: "0", count: 6 - frac.count) + frac
+        return USDAmount("\(avg / 1_000_000).\(pad)").map { tag($0.formatted(full: true)) } ?? Self.unknown
+    }
+    var usageCoverageText: String {
+        guard let p = portfolio, !stale, let u = p.usageAccountCount, u >= 0, u <= p.accountCount else {
+            return "사용량 반영 계정 " + Self.unknown
+        }
+        return "사용량 반영 \(u)/\(p.accountCount)" + (u < p.accountCount ? " (일부)" : "")
     }
     var resetText: String {
         guard let s = portfolio?.resetsAt, let d = TimeUtil.parse(s) else { return "초기화 " + Self.unknown }

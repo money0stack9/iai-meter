@@ -87,13 +87,21 @@ final class MenuBarController: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 else { let s = Int(t); secondary = "초기화 \(s / 3600)h\((s % 3600) / 60)m · " + cov }
             } else { secondary = "초기화 ? · " + cov }
         }
-        let details = (p?.accounts ?? []).prefix(8).map { a -> String in
+        let usageLines = [
+            "오늘 Router 사용 " + vm.usageCostText,
+            "Router 요청 " + vm.requestCountText,
+            "요청당 평균 " + vm.averageRequestCostText,
+            vm.usageCoverageText,
+            "조회는 AI를 호출하지 않습니다",
+            "작은 작업은 묶어서 요청"
+        ]
+        let acctLines = (p?.accounts ?? []).prefix(8).map { a -> String in
             var s = a.label + " · " + (a.snapshot.balance?.conservativeAvailableUsd?.formatted() ?? MeterViewModel.unknown)
             if !a.balanceIncluded { s += " (제외)" }
             if a.snapshot.state != "ready" { s += " · " + stateLabel(a.snapshot.state) }
             return s
         }
-        panel.update(primary: (vm.isDemo ? "DEMO " : "") + primary, secondary: secondary, details: Array(details), warning: warn)
+        panel.update(primary: (vm.isDemo ? "DEMO " : "") + primary, secondary: secondary, details: usageLines + Array(acctLines), warning: warn)
         let title = "iAI " + (vm.isDemo ? "DEMO " : "") + primary + (warn ? " ⚠︎" : "")
         if let b = statusItem.button {
             b.title = title
@@ -116,6 +124,10 @@ final class MenuBarController: NSObject, NSApplicationDelegate, NSMenuDelegate {
         info("USD 크레딧 · 간단 표시는 소수 2자리 버림, 계정별은 6자리")
         info("확정 전 사용액이 반영되면 가용액이 바뀔 수 있음")
         info(vm.coverageText + (isPartial(p) ? " · 일부만 반영" : ""))
+        info("오늘 Router 사용(전체 집계) " + vm.usageCostText)
+        info("Router 요청 " + vm.requestCountText + " · 요청당 평균 " + vm.averageRequestCostText)
+        info(vm.usageCoverageText + " · 확인된 사용량 기준")
+        info("조회는 AI를 호출하지 않습니다 · 작은 작업은 묶어서 요청")
         if let s = p?.resetsAt, let d = TimeUtil.parse(s) { info("초기화 " + df.string(from: d) + " · " + vm.resetText) }
         else { info(vm.resetText) }
         if vm.stale || client.hasError {

@@ -41,6 +41,8 @@ const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=nu
 const com=s=>s.replace(/\B(?=(\d{3})+(?!\d))/g,',');
 const usd=v=>typeof v==='string'&&/^-?\d+\.\d{6}$/.test(v)?'$'+v:U;
 const tok=v=>typeof v==='string'&&/^\d+$/.test(v)?com(v):(typeof v==='number'&&Number.isSafeInteger(v)&&v>=0?com(String(v)):U);
+const rq=v=>typeof v==='string'&&/^\d{1,30}$/.test(v)?com(BigInt(v).toString()):U;
+const avg=(c,r)=>{if(typeof c!=='string'||!/^\d+\.\d{6}$/.test(c)||typeof r!=='string'||!/^\d{1,30}$/.test(r))return U;const n=BigInt(r);if(n===0n)return '요청 없음';const s=(BigInt(c.replace('.',''))/n).toString().padStart(7,'0');return '$'+s.slice(0,-6)+'.'+s.slice(-6)};
 const ts=v=>{const d=v?new Date(v):null;return d&&!isNaN(d)?d.toLocaleString():U};
 const valid=p=>p&&typeof p==='object'&&p.schema==='iai-meter.portfolio.v1'&&Array.isArray(p.accounts);
 const kv=(g,l,v,c)=>{const d=el('div');d.append(el('div','lbl',l),el('div',c||'',v));g.append(d);return d};
@@ -64,8 +66,9 @@ if(d.state==='partial')c.append(el('p','warn','부분 반영: 잔액 '+(d.balanc
 if(d.state==='error')c.append(el('p','err','상태 오류: 일부 또는 전체 데이터를 확인할 수 없습니다.'));
 if(d.state==='unconfigured')c.append(el('p','warn','설정된 계정이 없습니다.'));
 c.append(el('div','lbl','남은 무료 크레딧 · USD'),el('div','big',usd(t.reportedCreditUsd)));
-const g=el('div','grid');kv(g,'보수적 사용 가능액',usd(t.conservativeAvailableUsd));kv(g,'오늘 Router 사용 비용',usd(t.costUsd));kv(g,'오늘 Router 토큰',tok(t.totalTokens));
+const g=el('div','grid');kv(g,'보수적 사용 가능액',usd(t.conservativeAvailableUsd));kv(g,'오늘 Router 사용 비용',usd(t.costUsd));kv(g,'오늘 Router 토큰',tok(t.totalTokens));kv(g,'오늘 Router 요청 수',rq(t.requests));kv(g,'오늘 Router 요청당 평균',avg(t.costUsd,t.requests));
 kv(g,'크레딧 일자 (UTC)',d.creditDayUtc||U);kv(g,'초기화 (현지 시간)',ts(d.resetsAt)+' · 매일 00:00 UTC');kv(g,'초기화까지','').lastChild.id='cd';kv(g,'상태 요청 시각',ts(d.generatedAt));c.append(g);
+c.append(el('p','lbl','Router 전체 집계이며 확인된 사용량 기준입니다. 조회는 AI를 호출하지 않습니다. 작은 작업은 묶어서 요청하세요.'));
 let unk=false;for(const a of d.accounts){if(!a.balanceIncluded)continue;const b=a.snapshot&&a.snapshot.balance;if(!b||b.unsettledUsd==null)unk=true}
 if(unk)c.append(el('p','warn','일부 계정의 미정산 금액을 확인할 수 없어 실제 사용 가능액은 더 낮을 수 있습니다.'));
 app.append(c);
@@ -73,7 +76,7 @@ const ac=el('section','card');ac.append(el('h2','lbl','계정 ('+d.accounts.leng
 for(const a of d.accounts){const s=a.snapshot||{},b=s.balance||{},u=s.usage||{},det=el('details'),sm=el('summary');det.dataset.account=String(a.id??a.accountId??'');if(openIds.has(det.dataset.account))det.open=true;
 sm.append(String(a.label||a.id||U)+' · '+(({ready:'정상',partial:'일부 확인',stale:'이전 값',error:'오류',unconfigured:'미설정',demo:'데모'})[s.state]||U));if(!a.balanceIncluded)sm.append(' ',el('span','warn','[잔액 제외]'));if(!a.usageIncluded)sm.append(' ',el('span','warn','[사용량 제외]'));
 const gg=el('div','grid');kv(gg,'남은 무료 크레딧 · USD',usd(b.reportedCreditUsd));kv(gg,'보수적 사용 가능액',usd(b.conservativeAvailableUsd));kv(gg,'미정산',b.unsettledUsd==null?U:usd(b.unsettledUsd));
-kv(gg,'오늘 비용',usd(u.costUsd));kv(gg,'오늘 토큰',tok(u.totalTokens));kv(gg,'크레딧 일자 (UTC)',s.creditDayUtc||U);kv(gg,'초기화',ts(s.resetsAt));kv(gg,'잔액 확인 시각',ts(s.balanceObservedAt));kv(gg,'사용량 확인 시각',ts(s.usageObservedAt));
+kv(gg,'오늘 비용',usd(u.costUsd));kv(gg,'오늘 토큰',tok(u.totalTokens));kv(gg,'오늘 요청',rq(u.requests));kv(gg,'크레딧 일자 (UTC)',s.creditDayUtc||U);kv(gg,'초기화',ts(s.resetsAt));kv(gg,'잔액 확인 시각',ts(s.balanceObservedAt));kv(gg,'사용량 확인 시각',ts(s.usageObservedAt));
 if(Array.isArray(s.errors)&&s.errors.length)kv(gg,'오류','오류 '+s.errors.length+'건','err');det.append(sm,gg);ac.append(det)}
 app.append(ac);
 const ids=[...new Set(d.accounts.flatMap(a=>(a.snapshot&&Array.isArray(a.snapshot.models)?a.snapshot.models:[]).map(m=>m&&m.id).filter(x=>typeof x==='string')))].sort(),prev=md.value;

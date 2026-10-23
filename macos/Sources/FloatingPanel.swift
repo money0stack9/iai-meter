@@ -74,7 +74,7 @@ final class FloatingPanel: NSPanel {
         secondaryLabel.stringValue = secondary
         secondaryLabel.toolTip = secondary
         secondaryLabel.textColor = warning ? .systemOrange : .secondaryLabelColor
-        self.details = Array(details.prefix(8))
+        self.details = Array(details.prefix(14))
         expandButton.isEnabled = !self.details.isEmpty
         if self.details.isEmpty { expanded = false }
         layoutContent()
