@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.*
+secrets/
+*.secret
+*.pem
+*.key
+private/
+private-output/
+output/private/
+*.private.*
+!.env.example

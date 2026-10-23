@@ -1,0 +1,6 @@
+{
+  "accounts": [
+    { "id": "account-a", "label": "계정 A", "keyEnv": "IAI_ACCOUNT_A_KEY" },
+    { "id": "account-b", "label": "계정 B", "keyEnv": "IAI_ACCOUNT_B_KEY" }
+  ]
+}

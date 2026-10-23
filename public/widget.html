@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ko" data-mode="http">
+<head>
+<meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>iAI Meter</title>
+<style>
+:root{--bg:#f7f4ee;--ink:#1f2328;--mut:#6b6f76;--ac:#2f7d78;--bd:#ddd6ca;--card:#fffdf9;--warn:#9a5b13;--err:#a3332b}
+@media(prefers-color-scheme:dark){:root{--bg:#171a1c;--ink:#e8e6e1;--mut:#9aa0a6;--ac:#5fb3ab;--bd:#33383c;--card:#1f2326;--warn:#e0a458;--err:#ef8a80}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,'Segoe UI',sans-serif}
+main{max-width:760px;margin:0 auto;padding:12px}header{display:flex;align-items:center;justify-content:space-between;gap:8px}
+h1{font-size:16px;margin:0}h2{margin:0 0 6px;font-weight:500}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-top:10px}
+.big{font-size:28px;font-weight:600;color:var(--ac);overflow-wrap:anywhere}.lbl{color:var(--mut);font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}.grid>div{overflow-wrap:anywhere}
+.warn{color:var(--warn)}.err{color:var(--err);font-weight:600}
+button,select,input{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--bd);border-radius:6px;padding:5px 9px;max-width:100%}
+label{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--mut)}
+:focus-visible{outline:2px solid var(--ac);outline-offset:2px}button:disabled{opacity:.55}
+details{border-top:1px solid var(--bd);padding:6px 0}summary{cursor:pointer}
+.badge{border:1px solid var(--ac);color:var(--ac);border-radius:99px;padding:0 7px;font-size:12px}[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+<header><h1>iAI Meter</h1><button id='rf' type='button' aria-label='새로고침'>새로고침</button></header>
+<p id='st' role='status' aria-live='polite' class='lbl'>불러오는 중…</p>
+<div id='app'></div>
+<section id='est' class='card' hidden aria-labelledby='eh'>
+<h2 id='eh' class='lbl'>예상 출력 토큰 (할당량이 아닌 추정치)</h2>
+<div class='grid'><label>모델<select id='md'></select></label><label>계정당 입력 토큰<input id='it' inputmode='numeric' value='0' maxlength='12' autocomplete='off'></label></div>
+<div class='lbl' style='margin-top:8px'>예상 출력 토큰</div><div class='big' id='eo'></div><div class='lbl' id='en'></div>
+</section>
+</main>
+<script>
+(()=>{
+const $=i=>document.getElementById(i),U='확인 안 됨',mode=document.documentElement.dataset.mode;
+const app=$('app'),st=$('st'),rf=$('rf'),est=$('est'),md=$('md'),it=$('it'),eo=$('eo'),en=$('en');
+let data=null,lastOk=0,lastFetch=0,busy=false,err=false,seq=0,inited=null;const pending=new Map(),timers=[];
+const el=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
+const com=s=>s.replace(/\B(?=(\d{3})+(?!\d))/g,',');
+const usd=v=>typeof v==='string'&&/^-?\d+\.\d{6}$/.test(v)?'$'+v:U;
+const tok=v=>typeof v==='string'&&/^\d+$/.test(v)?com(v):(typeof v==='number'&&Number.isSafeInteger(v)&&v>=0?com(String(v)):U);
+const ts=v=>{const d=v?new Date(v):null;return d&&!isNaN(d)?d.toLocaleString():U};
+const valid=p=>p&&typeof p==='object'&&p.schema==='iai-meter.portfolio.v1'&&Array.isArray(p.accounts);
+const kv=(g,l,v,c)=>{const d=el('div');d.append(el('div','lbl',l),el('div',c||'',v));g.append(d);return d};
+function rat(s){const m=typeof s==='string'&&/^(\d+)(?:\.(\d+))?(?:[eE]([+-]?\d+))?$/.exec(s);if(!m)return null;const f=m[2]||'';let n=BigInt(m[1]+f),d=10n**BigInt(f.length),e=+(m[3]||0);if(Math.abs(e)>60)return null;if(e>0)n*=10n**BigInt(e);else if(e<0)d*=10n**BigInt(-e);return{n,d}}
+function rpc(method,params){return new Promise((res,rej)=>{if(window.parent===window)return rej(0);const id=++seq,t=setTimeout(()=>{pending.delete(id);rej(0)},10000);pending.set(id,{res,rej,t});window.parent.postMessage({jsonrpc:'2.0',id,method,params},'*')})}
+function init(){return inited||(inited=rpc('ui/initialize',{protocolVersion:'2026-01-26',appInfo:{name:'iai-meter',version:'0.1.0'},appCapabilities:{}}).then(()=>{window.parent.postMessage({jsonrpc:'2.0',method:'ui/notifications/initialized'},'*')},e=>{inited=null;throw e}))}
+window.addEventListener('message',e=>{if(mode!=='mcp'||e.source!==window.parent)return;const m=e.data;if(!m||m.jsonrpc!=='2.0')return;
+if(m.id!=null&&pending.has(m.id)){const p=pending.get(m.id);pending.delete(m.id);clearTimeout(p.t);m.error?p.rej(0):p.res(m.result)}
+else if(m.method==='ui/notifications/tool-result'){const p=m.params&&m.params.structuredContent;if(valid(p)){data=p;lastOk=Date.now();err=false;render()}}});
+async function get(){if(mode==='mcp'){await init();const r=await rpc('tools/call',{name:'iai_meter_status',arguments:{}});if(!r||r.isError)throw 0;return r.structuredContent}
+const r=await fetch('./api/v1/status',{credentials:'same-origin',cache:'no-store',headers:{accept:'application/json'}});if(!r.ok)throw 0;return r.json()}
+async function load(){if(busy)return;busy=true;lastFetch=Date.now();tick();try{const p=await get();if(!valid(p))throw 0;data=p;lastOk=Date.now();err=false}catch(e){err=true}busy=false;render()}
+function render(){
+st.className=err?'err':'lbl';st.textContent=err?'오류: 최신 상태를 가져오지 못했습니다.'+(lastOk?' 마지막 성공 '+new Date(lastOk).toLocaleString()+' 데이터 표시 중':''):data?'업데이트됨 '+new Date(lastOk).toLocaleString():'';
+const openIds=new Set([...app.querySelectorAll('details[open]')].map(x=>x.dataset.account).filter(Boolean));app.replaceChildren();if(!data){est.hidden=true;tick();return}
+const d=data,t=d.totals||{},c=el('section','card');
+if(err)app.append(el('div','card err','오류: 아래는 이전에 확인된 데이터입니다 ('+(lastOk?new Date(lastOk).toLocaleString():U)+').'));
+if(d.state==='demo')c.append(el('span','badge','데모 데이터'));
+const n=d.accountCount;{const cv=el('p');cv.className='coverage';cv.textContent=`잔액 확인 ${d.balanceAccountCount??0}/${n??0} · 사용량 확인 ${d.usageAccountCount??0}/${n??0}`;app.append(cv)}
+if(d.state==='partial')c.append(el('p','warn','부분 반영: 잔액 '+(d.balanceAccountCount??U)+'/'+(n??U)+' 계정, 사용량 '+(d.usageAccountCount??U)+'/'+(n??U)+' 계정'));
+if(d.state==='error')c.append(el('p','err','상태 오류: 일부 또는 전체 데이터를 확인할 수 없습니다.'));
+if(d.state==='unconfigured')c.append(el('p','warn','설정된 계정이 없습니다.'));
+c.append(el('div','lbl','남은 무료 크레딧 · USD'),el('div','big',usd(t.reportedCreditUsd)));
+const g=el('div','grid');kv(g,'보수적 사용 가능액',usd(t.conservativeAvailableUsd));kv(g,'오늘 Router 사용 비용',usd(t.costUsd));kv(g,'오늘 Router 토큰',tok(t.totalTokens));
+kv(g,'크레딧 일자 (UTC)',d.creditDayUtc||U);kv(g,'초기화 (현지 시간)',ts(d.resetsAt)+' · 매일 00:00 UTC');kv(g,'초기화까지','').lastChild.id='cd';kv(g,'상태 요청 시각',ts(d.generatedAt));c.append(g);
+let unk=false;for(const a of d.accounts){if(!a.balanceIncluded)continue;const b=a.snapshot&&a.snapshot.balance;if(!b||b.unsettledUsd==null)unk=true}
+if(unk)c.append(el('p','warn','일부 계정의 미정산 금액을 확인할 수 없어 실제 사용 가능액은 더 낮을 수 있습니다.'));
+app.append(c);
+const ac=el('section','card');ac.append(el('h2','lbl','계정 ('+d.accounts.length+')'));
+for(const a of d.accounts){const s=a.snapshot||{},b=s.balance||{},u=s.usage||{},det=el('details'),sm=el('summary');det.dataset.account=String(a.id??a.accountId??'');if(openIds.has(det.dataset.account))det.open=true;
+sm.append(String(a.label||a.id||U)+' · '+(s.state||U));if(!a.balanceIncluded)sm.append(' ',el('span','warn','[잔액 제외]'));if(!a.usageIncluded)sm.append(' ',el('span','warn','[사용량 제외]'));
+const gg=el('div','grid');kv(gg,'남은 무료 크레딧 · USD',usd(b.reportedCreditUsd));kv(gg,'보수적 사용 가능액',usd(b.conservativeAvailableUsd));kv(gg,'미정산',b.unsettledUsd==null?U:usd(b.unsettledUsd));
+kv(gg,'오늘 비용',usd(u.costUsd));kv(gg,'오늘 토큰',tok(u.totalTokens));kv(gg,'크레딧 일자 (UTC)',s.creditDayUtc||U);kv(gg,'초기화',ts(s.resetsAt));kv(gg,'잔액 확인 시각',ts(s.balanceObservedAt));kv(gg,'사용량 확인 시각',ts(s.usageObservedAt));
+if(Array.isArray(s.errors)&&s.errors.length)kv(gg,'오류','오류 '+s.errors.length+'건','err');det.append(sm,gg);ac.append(det)}
+app.append(ac);
+const ids=[...new Set(d.accounts.flatMap(a=>(a.snapshot&&Array.isArray(a.snapshot.models)?a.snapshot.models:[]).map(m=>m&&m.id).filter(x=>typeof x==='string')))].sort(),prev=md.value;
+md.replaceChildren(...ids.map(i=>{const o=el('option','',i);o.value=i;return o}));if(ids.includes(prev))md.value=prev;
+est.hidden=!ids.length;calc();tick()}
+function calc(){if(!data||est.hidden)return;const v=it.value.trim();if(!/^\d{1,12}$/.test(v)){eo.textContent='—';en.textContent='입력 토큰은 0 이상 12자리 이하 정수여야 합니다.';en.className='err';return}
+const inT=BigInt(v),id=md.value;let sum=0n,k=0,nb=0;
+for(const a of data.accounts){if(!a.balanceIncluded)continue;nb++;const s=a.snapshot;if(!s||!s.balance||!Array.isArray(s.models))continue;
+const av=rat(s.balance.conservativeAvailableUsd),m=s.models.find(x=>x&&x.id===id);if(!av||!m)continue;const ip=rat(m.inputUsdPerToken),op=rat(m.outputUsdPerToken);if(!ip||!op||op.n<=0n)continue;
+k++;const rn=av.n*ip.d-inT*ip.n*av.d,rd=av.d*ip.d;if(rn>0n)sum+=(rn*op.d)/(rd*op.n)}
+en.className='lbl';eo.textContent=k?'≈ '+com(sum.toString()):U;
+en.textContent='잔액 포함 '+nb+'개 계정 중 이 모델 가격이 있는 '+k+'개 계정의 보수적 사용 가능액 기준 합산. 각 계정마다 입력 '+com(v)+' 토큰 비용을 먼저 차감한다고 가정. 실제 할당량이 아닌 추정치입니다.'}
+function tick(){const cd=$('cd');if(cd&&data){const r=new Date(data.resetsAt)-Date.now();if(isNaN(r))cd.textContent=U;else if(r<=0)cd.textContent='재조회 대기';else{const s=Math.max(0,Math.floor(r/1000));cd.textContent=[s/3600|0,(s/60|0)%60,s%60].map(x=>String(x).padStart(2,'0')).join(':')}}
+const w=60000-(Date.now()-lastFetch);rf.disabled=busy||w>0;rf.textContent=busy?'불러오는 중…':w>0?'새로고침 ('+Math.ceil(w/1000)+'초)':'새로고침'}
+rf.addEventListener('click',()=>{if(!busy&&Date.now()-lastFetch>=60000)load()});
+md.addEventListener('change',calc);it.addEventListener('input',calc);
+timers.push(setInterval(tick,1000),setInterval(()=>{if(document.visibilityState==='visible'&&Date.now()-lastFetch>=60000)load()},5000));
+window.addEventListener('pagehide',()=>{timers.forEach(clearInterval);pending.forEach(p=>clearTimeout(p.t));pending.clear()});
+load();
+})();
+</script>
+</body>
+</html>

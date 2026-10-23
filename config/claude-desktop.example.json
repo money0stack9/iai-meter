@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "iai-meter": {
+      "command": "node",
+      "args": [
+        "--env-file=/ABS/PATH/.env",
+        "/ABS/PATH/src/cli.js",
+        "mcp",
+        "--config",
+        "/ABS/PATH/config/accounts.example.json"
+      ]
+    }
+  }
+}
