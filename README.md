@@ -147,7 +147,7 @@ node src/cli.js demo
 
 ## ChatGPT(웹)
 
-- ChatGPT 웹에서 원격 MCP를 쓰려면 HTTPS와, 지원되는 OAuth 또는 인증 게이트웨이가 필요합니다. v0.1에는 이 기능이 포함되어 있지 않습니다.
+- ChatGPT 웹에서 쓰려면 인증이 적용된 HTTPS 원격 MCP 엔드포인트를 두거나, OpenAI 공식 [Secure MCP Tunnel](https://developers.openai.com/api/docs/guides/secure-mcp-tunnels)을 사용할 수 있습니다. 이 저장소에는 둘 다 설정되어 있지 않으며, ChatGPT 연결이 확인된 상태도 아닙니다.
 - 인증 없는 개인 API나 터널을 **절대 공개하지 마세요.**
 - 실제 앱 연결은 아직 검증되지 않았습니다.
 - GitHub에 공개하는 것은 플러그인 디렉터리 승인을 받는 것과 다릅니다.
@@ -167,6 +167,8 @@ node src/cli.js demo
 - https://blog.modelcontextprotocol.io/posts/2026-01-26-mcp-apps/
 - https://0gfoundation.github.io/0g-router/
 - https://0g.ai/blog/introducing-infinite-ai
+
+macOS에서는 [Mac 메뉴 막대와 작은 창](macos/README.md)으로 사용량을 볼 수 있습니다. ChatGPT 화면 안이 아니라 별도로 떠 있는 작은 네이티브 창이며, 60초마다 새로 고칩니다.
 
 ## 라이선스
 

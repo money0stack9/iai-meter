@@ -1,0 +1,21 @@
+name: macOS
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build app
+        run: bash macos/build.sh
+      - name: Model tests
+        run: |
+          mkdir -p macos/build
+          xcrun swiftc macos/Sources/StatusModel.swift macos/Tests/main.swift -o macos/build/model-tests
+          ./macos/build/model-tests
